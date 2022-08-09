@@ -18,17 +18,24 @@ class MyTokenObtainPairView(TokenObtainPairView):
 @api_view(['POST'])
 def register_user(request):
     data = request.data
+    if User.objects.filter(username=data['username']).exists() or User.objects.filter(email=data['email']).exists():
+        print('User with this name or email already exists')
+        return Response({'detail': 'User with this name or email already exists'}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        User.objects.create(
-            first_name=data['name'],
-            username=data['username'],
-            email=data['email'],
-            password=make_password(data['password']),
-        )
-        message = {'detail': 'User created successfully'}
-        return Response(message, status=status.HTTP_200_OK)
-    except:
-        message = {'detail': 'User with this email already exists'}
+        serializer = UserSerializer(data=request.data, many=False)
+        if serializer.is_valid():
+            user = User(
+                first_name=data['name'],
+                username=data['username'],
+                email=data['email'],
+                password=make_password(data['password']),
+            )
+            user.save()
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        return Response({'detail': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print(e)
+        message = {'detail': e}
         return Response(message, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -46,26 +53,29 @@ def get_users(request):
 @permission_classes([IsAuthenticated])
 def edit_profile(request):
     data = request.data
+    if User.objects.filter(username=data['username']).exists() or User.objects.filter(email=data['email']).exists():
+        print('User with this name or email already exists')
+        return Response({'detail': 'User with this name or email already exists'}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        User.objects.filter(pk=request.user.pk).update(
-            username=data['username'],
-            email=data['email'],
-            first_name=data['name'],
-            is_staff=data['is_staff']
-        )
+        serializer = UserSerializer(data=request.data, many=False)
+        if serializer.is_valid():
+            if 'password' in data and data['password'] != '':
+                User.objects.filter(pk=request.user.pk).update(
+                    password=make_password(data['password'])
+                )
 
-        if 'password' in data and data['password'] != '':
             User.objects.filter(pk=request.user.pk).update(
-                password=make_password(data['password'])
+                username=data['username'],
+                email=data['email'],
+                first_name=data['name'],
+                is_staff=data['is_staff']
             )
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        return Response({'detail': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     except Exception as e:
         print(e)
         return Response({"detail": 'Updating Failed'}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = User.objects.get(pk=request.user.pk)
-    serializer = UserSerializer(user, many=False)
-    return Response(serializer.data)
 
 
 @api_view(['PUT'])
@@ -73,24 +83,28 @@ def edit_profile(request):
 def edit_user(request, pk):
     data = request.data
     try:
-        User.objects.filter(pk=pk).update(
-            username=data['username'],
-            email=data['email'],
-            first_name=data['first_name'],
-            is_staff=data['is_staff']
-        )
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            if 'password' in data and data['password'] != '':
+                User.objects.filter(pk=pk).update(
+                    password=make_password(data['password'])
+                )
 
-        if 'password' in data and data['password'] != '':
             User.objects.filter(pk=pk).update(
-                password=make_password(data['password'])
+                username=data['username'],
+                email=data['email'],
+                first_name=data['first_name'],
+                is_staff=data['is_staff']
             )
 
-    except Exception as e:
-        print(e)
+            user = User.objects.get(pk=pk)
+            serializer = UserSerializer(user, many=False)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        print(serializer.errors)
+        return Response({'detail': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    user = User.objects.get(pk=pk)
-    serializer = UserSerializer(user, many=False)
-    return Response(serializer.data)
+    except Exception as e:
+        return Response({'detail': e}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['DELETE'])
